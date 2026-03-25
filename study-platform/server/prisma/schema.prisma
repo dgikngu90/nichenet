@@ -1,0 +1,77 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id            String    @id @default(uuid())
+  email         String    @unique
+  password      String
+  name          String
+  role          String
+  createdAt     DateTime  @default(now())
+  
+  videos        Video[]
+  quizzes       Quiz[]
+  sentMessages  Message[] @relation("SentMessages")
+  receivedMessages Message[] @relation("ReceivedMessages")
+  quizAttempts  QuizAttempt[]
+}
+
+model Video {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  cloudinaryUrl String
+  thumbnailUrl  String?
+  publicId      String
+  teacherId     String
+  teacher       User      @relation(fields: [teacherId], references: [id])
+  createdAt     DateTime  @default(now())
+}
+
+model Quiz {
+  id            String    @id @default(uuid())
+  title         String
+  description   String?
+  teacherId     String
+  teacher       User      @relation(fields: [teacherId], references: [id])
+  questions     Question[]
+  attempts      QuizAttempt[]
+  createdAt     DateTime  @default(now())
+}
+
+model Question {
+  id            String    @id @default(uuid())
+  quizId        String
+  quiz          Quiz      @relation(fields: [quizId], references: [id], onDelete: Cascade)
+  questionText  String
+  options       String
+  correctAnswer Int
+}
+
+model QuizAttempt {
+  id            String    @id @default(uuid())
+  studentId     String
+  student       User      @relation(fields: [studentId], references: [id])
+  quizId        String
+  quiz          Quiz      @relation(fields: [quizId], references: [id])
+  score         Int
+  answers       String
+  submittedAt   DateTime  @default(now())
+}
+
+model Message {
+  id            String    @id @default(uuid())
+  senderId      String
+  sender        User      @relation("SentMessages", fields: [senderId], references: [id])
+  recipientId   String?
+  recipient     User?     @relation("ReceivedMessages", fields: [recipientId], references: [id])
+  content       String
+  isBroadcast   Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+}

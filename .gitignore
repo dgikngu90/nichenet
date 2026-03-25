@@ -1,0 +1,45 @@
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Dependencies
+node_modules/
+npm-debug.log*
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Testing
+coverage/
+.pytest_cache/
+
+# Misc
+.cache/
+temp/
+tmp/
+
+# Prisma
+backend/prisma/migrations/*/migration.template
+
+# Secrets
+secrets/
+*.pem
+*.key
+*.crt

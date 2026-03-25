@@ -1,0 +1,349 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  username      String    @unique
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  bio           String?   @db.Text
+  privacyLevel  PrivacyLevel @default(PUBLIC)
+  isActive      Boolean   @default(true)
+  isBanned      Boolean   @default(false)
+  banReason     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  communities     CommunityMember[]
+  posts           Post[]
+  comments        Comment[]
+  ownedCommunities Community[] @relation("CommunityOwner")
+  invites         CommunityInvite[] @relation("ReceivedInvites")
+  sentInvites     CommunityInvite[] @relation("SentInvites")
+  reports         Report[] @relation("ReportedReports")
+  resolvedReports Report[] @relation("ResolvedReports")
+  modActions     ModAction[] @relation("ModeratorActions")
+  targetedActions ModAction[] @relation("TargetedActions")
+  followedBy     Follow[] @relation("Following")
+  following      Follow[] @relation("Follower")
+  notifications  Notification[]
+  accounts        Account[]
+  sessions        Session[]
+  votes           Vote[]
+
+  @@index([email])
+  @@index([username])
+  @@index([isActive])
+}
+
+model Community {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?  @db.Text
+  rules       String?  @db.Text
+  icon        String?
+  banner      String?
+  isPrivate   Boolean  @default(false)
+  isNSFW      Boolean  @default(false)
+  requiresApproval Boolean @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Owner
+  ownerId String
+  owner   User   @relation("CommunityOwner", fields: [ownerId], references: [id])
+
+  // Relations
+  members      CommunityMember[]
+  posts        Post[]
+  invites      CommunityInvite[]
+  modActions   ModAction[]
+
+  @@index([slug])
+  @@index([isPrivate])
+  @@index([ownerId])
+}
+
+model CommunityMember {
+  id        String   @id @default(cuid())
+  userId    String
+  communityId String
+  role      MemberRole @default(MEMBER)
+  joinedAt  DateTime @default(now())
+  isFollowing Boolean @default(false)
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  community Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, communityId])
+  @@index([userId])
+  @@index([communityId])
+}
+
+model Post {
+  id           String   @id @default(cuid())
+  title        String
+  content      String?  @db.Text
+  type         PostType
+  url          String?
+  category     String?
+  isNsfw       Boolean  @default(false)
+  isSpoiler    Boolean  @default(false)
+  isPinned     Boolean  @default(false)
+  upvotes      Int      @default(0)
+  downvotes    Int      @default(0)
+  commentCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  authorId    String
+  communityId String
+
+  author    User     @relation(fields: [authorId], references: [id])
+  community Community @relation(fields: [communityId], references: [id])
+  comments  Comment[]
+  votes     Vote[]
+
+  @@index([communityId])
+  @@index([authorId])
+  @@index([createdAt])
+  @@unique([id])
+}
+
+model Comment {
+  id         String   @id @default(cuid())
+  content    String   @db.Text
+  upvotes    Int      @default(0)
+  downvotes  Int      @default(0)
+  editedAt   DateTime?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  authorId  String
+  postId    String
+  parentId  String?
+
+  author    User     @relation(fields: [authorId], references: [id])
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  children  Comment[] @relation("CommentReplies")
+  parent    Comment? @relation("CommentReplies", fields: [parentId], references: [id])
+  votes     Vote[]
+
+  @@index([postId])
+  @@index([authorId])
+  @@index([parentId])
+  @@unique([id])
+}
+
+model Vote {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String?
+  commentId String?
+  value     Int      // 1 for upvote, -1 for downvote
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post    Post?   @relation(fields: [postId], references: [id], onDelete: Cascade)
+  comment Comment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@unique([userId, commentId])
+  @@index([userId])
+}
+
+model CommunityInvite {
+  id         String   @id @default(cuid())
+  communityId String
+  inviterId   String
+  inviteeId   String
+  token       String   @unique
+  status      InviteStatus @default(PENDING)
+  expiresAt   DateTime?
+  createdAt   DateTime @default(now())
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  inviter     User     @relation("SentInvites", fields: [inviterId], references: [id])
+  invitee     User     @relation("ReceivedInvites", fields: [inviteeId], references: [id])
+
+  @@unique([communityId, inviterId, inviteeId])
+  @@index([token])
+  @@index([inviteeId])
+}
+
+model Report {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reportedType ReportType
+  reportedId  String
+  reason      String
+  description String?  @db.Text
+  status      ReportStatus @default(PENDING)
+  resolvedBy  String?
+  resolvedAt  DateTime?
+  createdAt   DateTime @default(now())
+
+  reporter    User     @relation("ReportedReports", fields: [reporterId], references: [id])
+  resolver    User?    @relation("ResolvedReports", fields: [resolvedBy], references: [id])
+
+  @@unique([reporterId, reportedType, reportedId])
+  @@index([reportedId])
+  @@index([status])
+}
+
+model ModAction {
+  id            String   @id @default(cuid())
+  moderatorId   String
+  communityId  String
+  targetUserId String?
+  actionType   ModActionType
+  reason       String?  @db.Text
+  duration     Int?     // Temporary action duration in hours (null = permanent)
+  expiresAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  moderator    User     @relation("ModeratorActions", fields: [moderatorId], references: [id])
+  community    Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  targetUser   User?    @relation("TargetedActions", fields: [targetUserId], references: [id])
+
+  @@index([moderatorId])
+  @@index([communityId])
+  @@index([targetUserId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      NotificationType
+  data      Json     // Flexible data for different notification types
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Follow {
+  id            String   @id @default(cuid())
+  followerId    String
+  followingId   String
+  type          FollowType
+  createdAt     DateTime @default(now())
+
+  follower      User     @relation("Following", fields: [followerId], references: [id])
+  following     User     @relation("Follower", fields: [followingId], references: [id])
+
+  @@unique([followerId, followingId, type])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// Enums
+enum PrivacyLevel {
+  PUBLIC
+  PRIVATE
+}
+
+enum MemberRole {
+  OWNER
+  MODERATOR
+  MEMBER
+}
+
+enum PostType {
+  TEXT
+  LINK
+  IMAGE
+}
+
+enum InviteStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  EXPIRED
+}
+
+enum ReportType {
+  POST
+  COMMENT
+  USER
+  COMMUNITY
+}
+
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  DISMISSED
+}
+
+enum ModActionType {
+  BAN
+  UNBAN
+  MUTE
+  UNMUTE
+  REMOVE_POST
+  REMOVE_COMMENT
+  WARNING
+}
+
+enum NotificationType {
+  POST_REPLY
+  COMMENT_REPLY
+  MENTION
+  INVITE
+  MOD_ACTION
+  COMMUNITY_UPDATE
+  SYSTEM
+}
+
+enum FollowType {
+  USER
+  COMMUNITY
+}
